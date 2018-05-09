@@ -130,13 +130,13 @@ export default function createTextMaskInputElement(config) {
       const piped = typeof pipe === strFunction
 
       let currentValues = {
+        conformedValue,
         safeRawValue,
         caretTrapIndexes
       }
 
       // If `pipe` is a function, we call it.
       if (piped) {
-        let pipeResults
         if (debouncePipeValidation) {
           // wait before piping:
           // if we want to be able to replace character, we need to wait for the user to complete its modification
@@ -145,14 +145,9 @@ export default function createTextMaskInputElement(config) {
           // -> if no debounce, we type '1', it will make for month '19' which is invalid
           clearTimeout(state.debounceTimeout)
           state.debounceTimeout = setTimeout(() => {
-            pipeResults = pipeResult(
-              pipe,
-              conformedValue,
-              {rawValue: safeRawValue, ...conformToMaskConfig},
-              previousConformedValue
+            pipeAndAdjustCaret(
+              pipe, currentValues, conformToMaskConfig, previousConformedValue, adjustCaretConfig, state
             )
-            currentValues.indexesOfPipedChars = pipeResults.indexesOfPipedChars
-            adjustCaretAndUpdateInput(pipeResults.value, state, adjustCaretConfig, currentValues)
           }, debouncePipeValidation)
           // but we replace immediately, even without piping
           // and move the caret to the next position
@@ -160,14 +155,7 @@ export default function createTextMaskInputElement(config) {
           // previousConformedValue 'valid' and 'accurate'
           adjustCaretAndUpdateInput(conformedValue, state, adjustCaretConfig, currentValues, true)
         } else {
-          pipeResults = pipeResult(
-            pipe,
-            conformedValue,
-            {rawValue: safeRawValue, ...conformToMaskConfig},
-            previousConformedValue
-          )
-          currentValues.indexesOfPipedChars = pipeResults.indexesOfPipedChars
-          adjustCaretAndUpdateInput(pipeResults.value, state, adjustCaretConfig, currentValues)
+          pipeAndAdjustCaret(pipe, currentValues, conformToMaskConfig, previousConformedValue, adjustCaretConfig, state)
         }
       } else {
         adjustCaretAndUpdateInput(conformedValue, state, adjustCaretConfig, currentValues)
@@ -199,6 +187,19 @@ function getSafeRawValue(inputValue) {
       `received was:\n\n ${JSON.stringify(inputValue)}`
     )
   }
+}
+
+function pipeAndAdjustCaret(
+  pipe, currentValues, conformToMaskConfig, previousConformedValue, adjustCaretConfig, state
+) {
+  const pipeResults = pipeResult(
+    pipe,
+    currentValues.conformedValue,
+    {rawValue: currentValues.safeRawValue, ...conformToMaskConfig},
+    previousConformedValue
+  )
+  currentValues.indexesOfPipedChars = pipeResults.indexesOfPipedChars
+  adjustCaretAndUpdateInput(pipeResults.value, state, adjustCaretConfig, currentValues)
 }
 
 function pipeResult(pipe, conformedValue, config, previousConformedValue) {

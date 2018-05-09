@@ -5,8 +5,10 @@
   * [`guide`](#guide) (boolean)
   * [`placeholderChar`](#placeholderchar) (string)
   * [`keepCharPositions`](#keepcharpositions) (boolean)
+  * [`allowReplacing`](#allowReplacing) (boolean)
   * [`pipe`](#pipe) (function)
   * [`showMask`](#showmask) (boolean)
+  * [`debouncePipeValidation`] (#debouncePipeValidation) (number)
 * [Included `conformToMask`](#included-conformtomask)
 * Known issues
   * [Supported `<input>` types](#supported-input-types)
@@ -161,6 +163,13 @@ causes existing characters to move back.
 </tbody>
 </table>
 
+## `allowReplacing`
+
+`allowReplacing` enable the replacement in `keepCharPositions` mode.
+
+**It is set to `false` by default**,
+
+
 ## `pipe`
 
 You can provide a `pipe` function that will give you the opportunity to modify the conformed value before it is
@@ -196,6 +205,15 @@ which is a [Text Mask addon](https://github.com/text-mask/text-mask/tree/master/
 
 `showMask` is a boolean that tells the Text Mask component to display the mask as a
 placeholder in place of the regular placeholder when the input element value is empty.
+
+## `debouncePipeValidation`
+
+You can provide a `debouncePipeValidation` to delay the pipe function. It is usefull if you want to let the user enter
+several character before checking the validity of the complete input value.
+
+e.g.: used with `allowReplacing`, it will be possible to change a date, by replace the month `09` to `11` without having
+an intermediate error on `18`. 
+
 
 ---
 
