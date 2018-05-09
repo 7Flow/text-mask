@@ -29,6 +29,10 @@ export default class MaskedInput extends React.Component {
     this.initTextMask()
   }
 
+  componentWillUnmount() {
+    clearTimeout(this.changeTimeout)
+  }
+
   render() {
     const {render, ...props} = this.props
 
@@ -41,6 +45,8 @@ export default class MaskedInput extends React.Component {
     delete props.onBlur
     delete props.onChange
     delete props.showMask
+    delete props.allowReplacing
+    delete props.debouncePipeValidation
 
     const ref = (inputElement) => (this.inputElement = inputElement)
 
@@ -56,7 +62,16 @@ export default class MaskedInput extends React.Component {
     this.textMaskInputElement.update()
 
     if (typeof this.props.onChange === 'function') {
-      this.props.onChange(event)
+      // wait for pipe function before calling callback
+      const _eventCopy = Object.assign({}, event) // react recycle event
+      if (this.props.debouncePipeValidation > 0) {
+        clearTimeout(this.changeTimeout)
+        this.changeTimeout = setTimeout(() => {
+          this.props.onChange(_eventCopy)
+        }, this.props.debouncePipeValidation + 100)
+      } else {
+        this.props.onChange(event)
+      }
     }
   }
 
@@ -83,6 +98,8 @@ MaskedInput.propTypes = {
   placeholderChar: PropTypes.string,
   keepCharPositions: PropTypes.bool,
   showMask: PropTypes.bool,
+  allowReplacing: PropTypes.bool,
+  debouncePipeValidation: PropTypes.oneOfType([PropTypes.bool, PropTypes.number]),
 }
 
 MaskedInput.defaultProps = {

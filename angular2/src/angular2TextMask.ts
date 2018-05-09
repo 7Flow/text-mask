@@ -10,6 +10,8 @@ export class TextMaskConfig {
   pipe?: (conformedValue: string, config: TextMaskConfig) => false | string | object
   keepCharPositions?: boolean
   showMask?: boolean
+  allowReplacing?: boolean
+  debouncePipeValidation?: false | number
 }
 
 export const MASKEDINPUT_VALUE_ACCESSOR: Provider = {

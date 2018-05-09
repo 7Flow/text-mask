@@ -3,6 +3,7 @@ require('babel-core/register')({plugins: ['babel-plugin-rewire']})
 import packageJson from '../package.json'
 import conformToMask from '../src/conformToMask'
 import {placeholderChar} from '../src/constants'
+import createAutoCorrectedDatePipe from '../../addons/src/createAutoCorrectedDatePipe'
 
 const createTextMaskInputElement = (isVerify()) ?
   require(`../${packageJson.main}`).createTextMaskInputElement :
@@ -358,6 +359,107 @@ describe('createTextMaskInputElement', () => {
       inputElement.value = '234' // <- you have to change the value
       textMaskControl.update()
       expect(inputElement.value).to.equal('(234) ___-____')
+    })
+
+    it('with `allowReplacing`: replace characters (without adding and pushing to the left the other)', () => {
+      const _config = {
+        inputElement,
+        mask: [/[01]/, /[0-9]/, '/', /[0123]/, /[0-9]/, '/', /[12]/, /[0-9]/, /[0-9]/, /[0-9]/],
+        guide: true,
+        keepCharPositions: true,
+        allowReplacing: true,
+      }
+      const textMaskControl = createTextMaskInputElement(_config)
+      inputElement.value = '  0412'
+      textMaskControl.update()
+      expect(inputElement.value).to.equal('04/12/____')
+
+      inputElement.selectionEnd = 2
+      textMaskControl.update('054/12/____', _config)
+      expect(inputElement.value).to.equal('05/12/____')
+    })
+
+    it('with `allowReplacing`: we can replace multiple char before pipe validation', (done) => {
+      const _config = {
+        inputElement,
+        mask: [/[01]/, /[0-9]/, '/', /[0123]/, /[0-9]/, '/', /[12]/, /[0-9]/, /[0-9]/, /[0-9]/],
+        guide: true,
+        placeholderChar: '\u005F',
+        keepCharPositions: true,
+        allowReplacing: true,
+        debouncePipeValidation: 150,
+        pipe: createAutoCorrectedDatePipe('MM/DD/YYYY')
+      }
+      const textMaskControl = createTextMaskInputElement(_config)
+      inputElement.value = ' 0919 2017 '
+      textMaskControl.update()
+      expect(inputElement.value).to.equal('09/19/2017')
+
+      // wait for debounce to have a previous conformed value defined
+      setTimeout(() => {
+        // set an invalid month (temporary)
+        inputElement.selectionEnd = 1
+        textMaskControl.update('109/19/2017', _config)
+        expect(inputElement.value).to.equal('19/19/2017') // with debounce, we can enter a invalid value for a while
+
+        inputElement.selectionEnd = 2
+        textMaskControl.update('119/19/2017', _config)
+        expect(inputElement.value).to.equal('11/19/2017') // but now we have a valid value
+
+        // wait for debounce to confirm value
+        setTimeout(() => {
+          expect(inputElement.value).to.equal('11/19/2017')
+          done()
+        }, _config.debouncePipeValidation + 10)
+      }, _config.debouncePipeValidation + 10)
+    })
+
+    it('with `allowReplacing`: we can have an invalid value temporary, but we go back to previous version', (done) => {
+      const _config = {
+        inputElement,
+        mask: [/[01]/, /[0-9]/, '/', /[0123]/, /[0-9]/, '/', /[12]/, /[0-9]/, /[0-9]/, /[0-9]/],
+        guide: true,
+        placeholderChar: '\u005F',
+        keepCharPositions: true,
+        allowReplacing: true,
+        debouncePipeValidation: 150,
+        pipe: createAutoCorrectedDatePipe('MM/DD/YYYY')
+      }
+      const textMaskControl = createTextMaskInputElement(_config)
+      textMaskControl.update('09/19/2017')
+      expect(inputElement.value).to.equal('09/19/2017')
+
+      // wait for debounce to have a previous conformed value defined
+      setTimeout(() => {
+        // set an invalid month (temporary)
+        inputElement.selectionEnd = 1
+        textMaskControl.update('109/19/2017', _config)
+        expect(inputElement.value).to.equal('19/19/2017') // with debounce, we can enter a invalid value for a while
+
+        // wait for debounce to confirm value
+        setTimeout(() => {
+          expect(inputElement.value).to.equal('09/19/2017')
+          done()
+        }, _config.debouncePipeValidation + 10)
+      }, _config.debouncePipeValidation + 10)
+    })
+
+    it('with date validation (with `moment.js`), go back to previous value if date is invalid', () => {
+      const _config = {
+        inputElement,
+        mask: [/[01]/, /[0-9]/, '/', /[0123]/, /[0-9]/, '/', /[12]/, /[0-9]/, /[0-9]/, /[0-9]/],
+        guide: true,
+        keepCharPositions: true,
+        pipe: createAutoCorrectedDatePipe('MM/DD/YYYY')
+      }
+      const textMaskControl = createTextMaskInputElement(_config)
+      inputElement.value = '02/19/2018'
+      textMaskControl.update()
+      expect(inputElement.value).to.equal('02/19/2018')
+
+      inputElement.value = '02/31/2018'
+      textMaskControl.update()
+      expect(inputElement.value).to.equal('02/19/2018')
     })
   })
 })

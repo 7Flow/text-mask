@@ -20,5 +20,8 @@
     "input formatting",
     "text formatting",
     "string formatting"
-  ]
+  ],
+  "devDependencies": {
+    "moment": "^2.22.1"
+  }
 }

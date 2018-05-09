@@ -11,7 +11,7 @@ const defer = typeof requestAnimationFrame !== 'undefined' ? requestAnimationFra
 
 export default function createTextMaskInputElement(config) {
   // Anything that we will need to keep between `update` calls, we will store in this `state` object.
-  const state = {previousConformedValue: undefined, previousPlaceholder: undefined}
+  const state = {previousConformedValue: undefined, previousPlaceholder: undefined, debounceTimeout: undefined}
 
   return {
     state,
@@ -26,6 +26,8 @@ export default function createTextMaskInputElement(config) {
       pipe,
       placeholderChar = defaultPlaceholderChar,
       keepCharPositions = false,
+      allowReplacing = false,
+      debouncePipeValidation = false,
       showMask = false
     } = config) {
       // if `rawValue` is `undefined`, read from the `inputElement`
@@ -71,7 +73,7 @@ export default function createTextMaskInputElement(config) {
       const {selectionEnd: currentCaretPosition} = inputElement
 
       // We need to know what the `previousConformedValue` and `previousPlaceholder` is from the previous `update` call
-      const {previousConformedValue, previousPlaceholder} = state
+      const {previousConformedValue} = state
 
       let caretTrapIndexes
 
@@ -106,7 +108,19 @@ export default function createTextMaskInputElement(config) {
         pipe,
         placeholder,
         currentCaretPosition,
-        keepCharPositions
+        keepCharPositions,
+        allowReplacing,
+        inputElement
+      }
+
+      const adjustCaretConfig = {
+        placeholder,
+        showMask,
+        inputElement,
+        placeholderChar,
+        currentCaretPosition,
+        keepCharPositions,
+        allowReplacing
       }
 
       // `conformToMask` returns `conformedValue` as part of an object for future API flexibility
@@ -115,60 +129,49 @@ export default function createTextMaskInputElement(config) {
       // The following few lines are to support the `pipe` feature.
       const piped = typeof pipe === strFunction
 
-      let pipeResults = {}
+      let currentValues = {
+        safeRawValue,
+        caretTrapIndexes
+      }
 
       // If `pipe` is a function, we call it.
       if (piped) {
-        // `pipe` receives the `conformedValue` and the configurations with which `conformToMask` was called.
-        pipeResults = pipe(conformedValue, {rawValue: safeRawValue, ...conformToMaskConfig})
-
-        // `pipeResults` should be an object. But as a convenience, we allow the pipe author to just return `false` to
-        // indicate rejection. Or return just a string when there are no piped characters.
-        // If the `pipe` returns `false` or a string, the block below turns it into an object that the rest
-        // of the code can work with.
-        if (pipeResults === false) {
-          // If the `pipe` rejects `conformedValue`, we use the `previousConformedValue`, and set `rejected` to `true`.
-          pipeResults = {value: previousConformedValue, rejected: true}
-        } else if (isString(pipeResults)) {
-          pipeResults = {value: pipeResults}
+        let pipeResults
+        if (debouncePipeValidation) {
+          // wait before piping:
+          // if we want to be able to replace character, we need to wait for the user to complete its modification
+          // before pipe, cause we may have invalid intermediate (and unwanted) value
+          // e.g: we want to replace a month '09' by '10':
+          // -> if no debounce, we type '1', it will make for month '19' which is invalid
+          clearTimeout(state.debounceTimeout)
+          state.debounceTimeout = setTimeout(() => {
+            pipeResults = pipeResult(
+              pipe,
+              conformedValue,
+              {rawValue: safeRawValue, ...conformToMaskConfig},
+              previousConformedValue
+            )
+            currentValues.indexesOfPipedChars = pipeResults.indexesOfPipedChars
+            adjustCaretAndUpdateInput(pipeResults.value, state, adjustCaretConfig, currentValues)
+          }, debouncePipeValidation)
+          // but we replace immediately, even without piping
+          // and move the caret to the next position
+          // -> as we debounce the pipe validation, this 'intermediate' state should not be recorded, to keep the
+          // previousConformedValue 'valid' and 'accurate'
+          adjustCaretAndUpdateInput(conformedValue, state, adjustCaretConfig, currentValues, true)
+        } else {
+          pipeResults = pipeResult(
+            pipe,
+            conformedValue,
+            {rawValue: safeRawValue, ...conformToMaskConfig},
+            previousConformedValue
+          )
+          currentValues.indexesOfPipedChars = pipeResults.indexesOfPipedChars
+          adjustCaretAndUpdateInput(pipeResults.value, state, adjustCaretConfig, currentValues)
         }
+      } else {
+        adjustCaretAndUpdateInput(conformedValue, state, adjustCaretConfig, currentValues)
       }
-
-      // Before we proceed, we need to know which conformed value to use, the one returned by the pipe or the one
-      // returned by `conformToMask`.
-      const finalConformedValue = (piped) ? pipeResults.value : conformedValue
-
-      // After determining the conformed value, we will need to know where to set
-      // the caret position. `adjustCaretPosition` will tell us.
-      const adjustedCaretPosition = adjustCaretPosition({
-        previousConformedValue,
-        previousPlaceholder,
-        conformedValue: finalConformedValue,
-        placeholder,
-        rawValue: safeRawValue,
-        currentCaretPosition,
-        placeholderChar,
-        indexesOfPipedChars: pipeResults.indexesOfPipedChars,
-        caretTrapIndexes
-      })
-
-      // Text Mask sets the input value to an empty string when the condition below is set. It provides a better UX.
-      const inputValueShouldBeEmpty = finalConformedValue === placeholder && adjustedCaretPosition === 0
-      const emptyValue = showMask ? placeholder : emptyString
-      const inputElementValue = (inputValueShouldBeEmpty) ? emptyValue : finalConformedValue
-
-      state.previousConformedValue = inputElementValue // store value for access for next time
-      state.previousPlaceholder = placeholder
-
-      // In some cases, this `update` method will be repeatedly called with a raw value that has already been conformed
-      // and set to `inputElement.value`. The below check guards against needlessly readjusting the input state.
-      // See https://github.com/text-mask/text-mask/issues/231
-      if (inputElement.value === inputElementValue) {
-        return
-      }
-
-      inputElement.value = inputElementValue // set the input value
-      safeSetSelection(inputElement, adjustedCaretPosition) // adjust caret position
     }
   }
 }
@@ -196,4 +199,59 @@ function getSafeRawValue(inputValue) {
       `received was:\n\n ${JSON.stringify(inputValue)}`
     )
   }
+}
+
+function pipeResult(pipe, conformedValue, config, previousConformedValue) {
+  // `pipe` receives the `conformedValue` and the configurations with which `conformToMask` was called.
+  let pipeResults = pipe(conformedValue, config)
+
+  // `pipeResults` should be an object. But as a convenience, we allow the pipe author to just return `false` to
+  // indicate rejection. Or return just a string when there are no piped characters.
+  // If the `pipe` returns `false` or a string, the block below turns it into an object that the rest
+  // of the code can work with.
+  if (pipeResults === false) {
+    // If the `pipe` rejects `conformedValue`, we use the `previousConformedValue`, and set `rejected` to `true`.
+    pipeResults = {value: previousConformedValue, rejected: true}
+  } else if (isString(pipeResults)) {
+    pipeResults = {value: pipeResults}
+  }
+  return pipeResults
+}
+
+function adjustCaretAndUpdateInput(finalConformedValue, state, config, currentValues, doNotUpdateState = false) {
+  const {previousConformedValue, previousPlaceholder} = state
+  const {placeholder, showMask, inputElement, placeholderChar, currentCaretPosition} = config
+
+    // After determining the conformed value, we will need to know where to set
+  // the caret position. `adjustCaretPosition` will tell us.
+  const adjustedCaretPosition = adjustCaretPosition({
+    previousConformedValue,
+    previousPlaceholder,
+    conformedValue: finalConformedValue,
+    placeholder,
+    rawValue: currentValues.safeRawValue,
+    currentCaretPosition,
+    placeholderChar,
+    indexesOfPipedChars: currentValues.indexesOfPipedChars,
+    caretTrapIndexes: currentValues.caretTrapIndexes,
+    replaceInPlace: (config.allowReplacing && config.keepCharPositions)
+  })
+
+  // Text Mask sets the input value to an empty string when the condition below is set. It provides a better UX.
+  const inputValueShouldBeEmpty = finalConformedValue === placeholder && adjustedCaretPosition === 0
+  const emptyValue = showMask ? placeholder : emptyString
+  const inputElementValue = (inputValueShouldBeEmpty) ? emptyValue : finalConformedValue
+
+  if (!doNotUpdateState) state.previousConformedValue = inputElementValue // store value for access for next time
+  state.previousPlaceholder = placeholder
+
+  // In some cases, this `update` method will be repeatedly called with a raw value that has already been conformed
+  // and set to `inputElement.value`. The below check guards against needlessly readjusting the input state.
+  // See https://github.com/text-mask/text-mask/issues/231
+  if (inputElement.value === inputElementValue) {
+    return
+  }
+
+  inputElement.value = inputElementValue // set the input value
+  safeSetSelection(inputElement, adjustedCaretPosition) // adjust caret position
 }

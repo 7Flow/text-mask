@@ -10,16 +10,16 @@ export default function adjustCaretPosition({
   placeholderChar,
   placeholder,
   indexesOfPipedChars = defaultArray,
-  caretTrapIndexes = defaultArray
+  caretTrapIndexes = defaultArray,
+  replaceInPlace
 }) {
-  if (currentCaretPosition === 0 || !rawValue.length) { return 0 }
+  if (currentCaretPosition === 0 || !rawValue || !rawValue.length) { return 0 }
 
   // Store lengths for faster performance?
   const rawValueLength = rawValue.length
-  const previousConformedValueLength = previousConformedValue.length
+  const previousConformedValueLength = previousConformedValue ? previousConformedValue.length : 0
   const placeholderLength = placeholder.length
-  const conformedValueLength = conformedValue.length
-
+  const conformedValueLength = conformedValue ? conformedValue.length : 0 // maybe not yet conformed
   // This tells us how long the edit is. If user modified input from `(2__)` to `(243__)`,
   // we know the user in this instance pasted two characters
   const editLength = rawValueLength - previousConformedValueLength
@@ -57,8 +57,13 @@ export default function adjustCaretPosition({
   let trackRightCharacter
   let targetChar
 
-  if (possiblyHasRejectedChar) {
-    startingSearchIndex = currentCaretPosition - editLength
+  if (possiblyHasRejectedChar && (!replaceInPlace || previousConformedValue === conformedValue)) {
+    // if we are in `replaceInPlace` mode (`config.keepCharPositions` && `config.allowReplacing`)
+    // we want to move forward the caret even if we type the same character as the old one
+    // TODO: actually we can't distinct typing the same character and go back to previous conformed value
+    // -> move forward in these 2 cases
+    if (!replaceInPlace) startingSearchIndex = currentCaretPosition - editLength
+    else startingSearchIndex = currentCaretPosition
   } else {
     // At this point in the algorithm, we want to know where the caret is right before the raw input
     // has been conformed, and then see if we can find that same spot in the conformed input.

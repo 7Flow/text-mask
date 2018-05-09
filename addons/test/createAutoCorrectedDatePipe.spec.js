@@ -6,7 +6,7 @@ describe('createAutoCorrectedDatePipe', () => {
   let autoCorrectedDatePipe
 
   it('accepts the date format as the first parameter and returns a date pipe function', () => {
-    autoCorrectedDatePipe = createAutoCorrectedDatePipe('mm dd yyyy')
+    autoCorrectedDatePipe = createAutoCorrectedDatePipe('MM DD YYYY')
   })
 
   it('completes the month if the 1st digit is bigger than 1 and returns `indexesOfPipedChars`', () => {
@@ -40,12 +40,12 @@ describe('createAutoCorrectedDatePipe', () => {
   })
 
   it('allows yy format', () => {
-    let pipe = createAutoCorrectedDatePipe('mm/yy')
+    let pipe = createAutoCorrectedDatePipe('MM/YY')
     expect(pipe('12/99')).to.deep.equal({value: '12/99', indexesOfPipedChars: []})
   })
 
   it('allows 00 for yy', () => {
-    let pipe = createAutoCorrectedDatePipe('mm dd yy')
+    let pipe = createAutoCorrectedDatePipe('MM DD YY')
     expect(pipe('12 31 00')).to.deep.equal({value: '12 31 00', indexesOfPipedChars: []})
   })
 
@@ -53,7 +53,7 @@ describe('createAutoCorrectedDatePipe', () => {
     let autoCorrectedDateTimePipe
 
     it('accepts the date time format as the first parameter and returns a date time pipe function', () => {
-      autoCorrectedDateTimePipe = createAutoCorrectedDatePipe('mm dd yyyy HH MM SS')
+      autoCorrectedDateTimePipe = createAutoCorrectedDatePipe('MM DD YYYY HH mm ss')
     })
 
     it('completes the hours if the 1st digit is bigger than 2 and returns `indexesOfPipedChars`', () => {
@@ -104,6 +104,41 @@ describe('createAutoCorrectedDatePipe', () => {
         autoCorrectedDateTimePipe('0 /  /     :  :  '))
           .to.deep.equal({value: '0 /  /     :  :  ', indexesOfPipedChars: []}
       )
+    })
+
+    it('returns true if the date contains numerical value separately valid, but that makes an incorrect date', () => {
+      autoCorrectedDateTimePipe = createAutoCorrectedDatePipe('MM/DD/YYYY HH:mm:ss')
+      expect(
+        autoCorrectedDateTimePipe('02/31/2018 10:10:00'))
+          .to.deep.equal({value: '02/31/2018 10:10:00', indexesOfPipedChars: []})
+    })
+
+    it('returns false if value makes an incorrect date, according to `moment.js` validation', () => {
+      expect(
+        autoCorrectedDateTimePipe('02/31/2018 10:10:00', {placeholderChar: '\u005F'}))
+          .to.equal(false)
+    })
+  })
+
+  describe('iso format', () => {
+    it('12 hours am/pm support, with `moment.js` validation', () => {
+      let pipe = createAutoCorrectedDatePipe('MM/DD/YYYY, hh:mm:ss A')
+      expect(
+        pipe('12/31/9999, 12:00:00 am', {placeholderChar: '\u005F'}))
+          .to.deep.equal({value: '12/31/9999, 12:00:00 am', indexesOfPipedChars: []})
+      expect(pipe('12/31/9999, 16:00:00 am')).to.equal(false)
+    })
+    it('24 hours support, with `moment.js` validation', () => {
+      let pipe = createAutoCorrectedDatePipe('MM/DD/YYYY, HH:mm:ss')
+      expect(
+        pipe('12/31/9999, 16:31:00', {placeholderChar: '\u005F'}))
+          .to.deep.equal({value: '12/31/9999, 16:31:00', indexesOfPipedChars: []})
+    })
+    it('timezone basic support, with `moment.js` validation', () => {
+      let pipe = createAutoCorrectedDatePipe('MM/DD/YYYY, HH:mm:ss ZZ')
+      expect(
+        pipe('12/31/9999, 16:31:00 -4000', {placeholderChar: '\u005F'}))
+          .to.deep.equal({value: '12/31/9999, 16:31:00 -4000', indexesOfPipedChars: []})
     })
   })
 })

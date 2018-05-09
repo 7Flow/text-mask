@@ -31,7 +31,8 @@ export default function conformToMask(rawValue = emptyString, mask = emptyArray,
     placeholderChar = defaultPlaceholderChar,
     placeholder = convertMaskToPlaceholder(mask, placeholderChar),
     currentCaretPosition,
-    keepCharPositions
+    keepCharPositions,
+    allowReplacing,
   } = config
 
   // The configs below indicate that the user wants the algorithm to work in *no guide* mode
@@ -168,11 +169,11 @@ export default function conformToMask(rawValue = emptyString, mask = emptyArray,
               for (let i = 0; i < rawValueArrLength; i++) {
                 const charData = rawValueArr[i]
 
-                if (charData.char !== placeholderChar && charData.isNew === false) {
+                if (!allowReplacing && charData.char !== placeholderChar && charData.isNew === false) {
                   break
                 }
 
-                if (charData.char === placeholderChar) {
+                if (allowReplacing || charData.char === placeholderChar) {
                   indexOfNextAvailablePlaceholderChar = i
                   break
                 }
