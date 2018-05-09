@@ -3,6 +3,7 @@
 [![Build Status](https://travis-ci.org/text-mask/text-mask.svg?branch=master)](https://travis-ci.org/text-mask/text-mask) 
 [![Maintainability](https://api.codeclimate.com/v1/badges/9b8b08c905c6594b671f/maintainability)](https://codeclimate.com/github/7Flow/text-mask/maintainability)
 
+
 Text Mask is an input mask library. It can create input masks for phone, date, currency, zip code, percentage, email, 
 and literally anything!
 
